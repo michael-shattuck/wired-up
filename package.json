@@ -1,0 +1,16 @@
+{
+  "name": "wired-up",
+  "version": "0.1.1",
+  "description": "Easy and functional dependency injection",
+  "main": "index.js",
+  "directories": {
+    "source": "src",
+    "example": "example"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
