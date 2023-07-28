@@ -2,7 +2,8 @@
   "name": "wired-up",
   "version": "0.1.1",
   "description": "Painless dependency injection for TypeScript",
-  "main": "index.js",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "directories": {
     "source": "src",
     "example": "example"
@@ -11,7 +12,12 @@
     "test": "jest --config jestconfig.json",
     "build": "tsc",
     "format": "prettier --write \"src/**/*.ts\"",
-    "lint": "tslint -p tsconfig.json"
+    "lint": "tslint -p tsconfig.json",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm test && npm run lint",
+    "preversion": "npm run lint",
+    "version": "npm run format && git add -A src",
+    "postversion": "git push && git push --tags"
   },
   "repository": {
     "type": "git",
@@ -27,7 +33,7 @@
     "ioc",
     "di"
   ],
-  "author": "Michael Shattuck <ms2474@gmail.com>",
+  "author": "Michael Shattuck",
   "license": "ISC",
   "dependencies": {
     "reflect-metadata": "^0.1.13"
