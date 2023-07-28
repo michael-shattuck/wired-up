@@ -1,10 +1,9 @@
 import { AsyncLocalStorage } from 'async_hooks';
 
-
 const asyncLocalStorage = new AsyncLocalStorage<any>();
 
 export const RequestScope = {
-  setScoped: function (key: string, value: any) {
+  setScoped: (key: string, value: any) => {
     const store = asyncLocalStorage.getStore();
     if (!store) {
       throw new Error('Attempt to set scoped value outside of scope');
@@ -17,7 +16,7 @@ export const RequestScope = {
     store[key] = value;
   },
 
-  getScoped: function <T>(key: string): T {
+  getScoped: <T>(key: string): T => {
     const store = asyncLocalStorage.getStore();
     if (!store) {
       throw new Error('Attempt to get scoped value outside of scope');
@@ -30,11 +29,11 @@ export const RequestScope = {
     return store && store[key];
   },
 
-  run: function (fn: (...args: any[]) => any) {
+  run: (fn: (...args: any[]) => any) => {
     asyncLocalStorage.run(new Map(), fn);
   },
 
-  deleteKey: function (key: string) {
+  deleteKey: (key: string) => {
     const store = asyncLocalStorage.getStore();
     if (!store) {
       throw new Error('Attempt to delete scoped value outside of scope');
@@ -45,5 +44,5 @@ export const RequestScope = {
     }
 
     delete store[key];
-  }
-}
+  },
+};
