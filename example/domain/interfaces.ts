@@ -5,3 +5,5 @@ export interface ILogger {
 export interface IDatabase {
   query(sql: string, params: any[]): Promise<any[]>;
 }
+
+export type DeeperFn = (count: number) => Promise<any>;

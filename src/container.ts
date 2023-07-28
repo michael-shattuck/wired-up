@@ -1,4 +1,4 @@
-import { describeTarget } from './describe-params';
+import { describeTarget } from './describe-target';
 import { RequestScope } from './scoped-manager';
 
 export type RegisteredService<TService> = {
@@ -184,7 +184,7 @@ export class Container {
 
     const params = describeTarget(func);
     const registeredServices = params
-      .map((param) => this._services.get(param.name))
+      .map((param) => this._services.get(param))
       .filter((service) => service !== undefined);
 
     if (registeredServices.length === 0) {
@@ -196,7 +196,7 @@ export class Container {
     }
 
     return await this.inject(
-      params.map((x) => x.name),
+      params,
       func,
     );
   }
@@ -210,7 +210,7 @@ export class Container {
     }
   }
 
-  private async getService(serviceName: string): Promise<any> {
+  public async getService(serviceName: string): Promise<any> {
     const service = this._services.get(serviceName);
     if (!service) {
       throw new Error(`Service ${serviceName} not registered`);

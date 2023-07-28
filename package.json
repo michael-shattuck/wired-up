@@ -36,6 +36,7 @@
   "author": "Michael Shattuck",
   "license": "ISC",
   "dependencies": {
+    "esprima": "^4.0.1",
     "reflect-metadata": "^0.1.13"
   },
   "devDependencies": {
