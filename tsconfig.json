@@ -9,7 +9,6 @@
     "preserveConstEnums": true,
     "types": [
       "node",
-      "reflect-metadata",
       "jest"
     ],
     "strict": true,

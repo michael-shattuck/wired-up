@@ -82,16 +82,155 @@ describe('Container class', () => {
     expect(setupFn).toHaveBeenCalledTimes(1);
   });
 
-  test('Container should be able to initiate transient services', async () => {
-    const setupFn = jest.fn().mockResolvedValue({});
+  test('Container should be able to initiate and teardown transient services', async () => {
+    const func = jest.fn().mockResolvedValue({});
+    const setupFn = jest.fn().mockResolvedValue(func);
     const teardownFn = jest.fn().mockResolvedValue(undefined);
 
     await Container.getInstance([
       transient('testService', setupFn, teardownFn),
     ]);
 
-    const service = await Container.instance.getService('testService');
+    await Container.instance.resolve(async (testService) => { 
+      await testService(); 
+    });
 
+    expect(func).toHaveBeenCalledTimes(1);
     expect(setupFn).toHaveBeenCalledTimes(1);
+    expect(teardownFn).toHaveBeenCalledTimes(1);
+  });
+
+  test('Container should be able to teardown transient services after use', async () => {
+    const methodSpy = jest.fn().mockResolvedValue({});
+    const teardownSpy = jest.fn().mockResolvedValue({});
+
+    class TestClass {
+      public tornDown = false;
+
+      async method() {
+        if (this.tornDown) throw new Error('Transient service was not torn down');
+        await methodSpy();
+        return this.tornDown;
+      }
+
+      async teardown() {
+        teardownSpy();
+        this.tornDown = true;
+      }
+    }
+
+    await Container.getInstance([
+      transient('testClass', TestClass, TestClass.prototype.teardown),
+    ]);
+
+    let tornDown;
+    await Container.instance.resolve(async (testClass: TestClass) => { 
+      tornDown = await testClass.method(); 
+    });
+
+    expect(tornDown).toBe(false);
+    expect(methodSpy).toHaveBeenCalledTimes(1);
+    expect(teardownSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test('Container should be able to teardown multiple transient services after use', async () => {
+    
+    const methodSpy = jest.fn().mockResolvedValue({});
+    const teardownSpy = jest.fn().mockResolvedValue({});
+    class TestClass {
+      async method() { await methodSpy(); }
+      async teardown() { teardownSpy(); }
+    }
+
+    const otherMethodSpy = jest.fn().mockResolvedValue({});
+    const otherTeardownSpy = jest.fn().mockResolvedValue({});
+    class OtherTestClass {
+      async method() { await otherMethodSpy(); }
+      async teardown() { otherTeardownSpy(); }
+    }
+
+    await Container.getInstance([
+      transient('testClass', TestClass, TestClass.prototype.teardown),
+      transient('otherTestClass', OtherTestClass, OtherTestClass.prototype.teardown),
+    ]);
+
+    await Container.instance.resolve(async (testClass: TestClass, otherTestClass: OtherTestClass) => { 
+      await testClass.method(); 
+      await otherTestClass.method(); 
+    });
+
+    expect(methodSpy).toHaveBeenCalledTimes(1);
+    expect(teardownSpy).toHaveBeenCalledTimes(1);
+    expect(otherMethodSpy).toHaveBeenCalledTimes(1);
+    expect(otherTeardownSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test('Container should be able to inject dependencies through multiple levels of depths', async () => {
+    const dependencySpy = jest.fn().mockResolvedValue({});
+    const deepDependencySpy = jest.fn().mockResolvedValue({});
+    const deeperDependencySpy = jest.fn().mockResolvedValue({});
+
+    const dependencyFn = async (deepDependency) => async () => {
+      await deepDependency();
+      dependencySpy();
+    }
+
+    const deepDependencyFn = async (deeperDependency) => async () => {
+      await deeperDependency();
+      deepDependencySpy();
+    }
+
+    const deeperDependencyFn = async () => async () => {
+      deeperDependencySpy();
+    }
+
+    await Container.getInstance([
+      transient('dependency', dependencyFn),
+      transient('deepDependency', deepDependencyFn),
+      transient('deeperDependency', deeperDependencyFn),
+    ]);
+
+    await Container.instance.resolve(async (dependency) => {
+      await dependency();
+    });
+
+    expect(dependencySpy).toHaveBeenCalledTimes(1);
+    expect(deepDependencySpy).toHaveBeenCalledTimes(1);
+    expect(deeperDependencySpy).toHaveBeenCalledTimes(1);
+  });
+
+
+  test('Container should be able to inject dependencies without async', async () => {
+    const dependencySpy = jest.fn().mockResolvedValue({});
+    const deepDependencySpy = jest.fn().mockResolvedValue({});
+    const deeperDependencySpy = jest.fn().mockResolvedValue({});
+
+    const dependencyFn = (deepDependency) => () => {
+      deepDependency();
+      dependencySpy();
+    }
+
+    const deepDependencyFn = (deeperDependency) => () => {
+      deeperDependency();
+      deepDependencySpy();
+    }
+
+    const deeperDependencyFn = () => () => {
+      deeperDependencySpy();
+    }
+
+    Container.getInstance([
+      transient('dependency', dependencyFn),
+      transient('deepDependency', deepDependencyFn),
+      transient('deeperDependency', deeperDependencyFn),
+    ]);
+
+    await Container.instance.resolve((dependency) => {
+      dependency();
+    });
+
+    expect(dependencySpy).toHaveBeenCalledTimes(1);
+    expect(deepDependencySpy).toHaveBeenCalledTimes(1);
+    expect(deeperDependencySpy).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,6 +1,6 @@
 import { describeTarget } from './describe-target';
 import { RequestScope } from './scoped-manager';
-import { RegisteredService, isConstructor } from './utils';
+import { RegisteredService, isClass, isConstructor } from './utils';
 
 
 /**
@@ -86,12 +86,17 @@ export class Container {
       throw new Error('Container has not been initialized');
     }
 
-    const singletons = Array.from(Container._instance._services.entries()).filter(
+    const singletons = Array.from(Container._instance._singletons.entries()).filter(
       ([_, service]) => service.registrationType === 'singleton',
     );
 
     for (const [serviceName, service] of singletons) {
-      if (service.teardown) await service.teardown();
+      const singletonService = Container._instance._singletons.get(serviceName);
+      if (service.teardown) {
+        if (isClass(service.impl)) await singletonService[service.teardown.name]()
+        else await service.teardown();
+      }
+
       Container._instance._singletons.delete(serviceName);
     }
 
@@ -136,7 +141,11 @@ export class Container {
 
     for (const [serviceName, service] of scopedServices) {
       const instance = RequestScope.getScoped(serviceName);
-      if (instance && service.teardown) await service.teardown();
+      if (instance && service.teardown) {
+        if (isClass(service.impl)) await instance[service.teardown.name]();
+        else await service.teardown();
+      }
+
       RequestScope.deleteKey(serviceName);
     }
   }
@@ -153,9 +162,13 @@ export class Container {
     const params = describeTarget(func);
 
     if (params.length === 0) {
-      return isClass
-        ? new func()
-        : await func();
+      try {
+        return isClass
+          ? new func()
+          : await func();
+      } catch (error) {
+
+      }
     }
 
     const registeredServices = params
@@ -163,6 +176,8 @@ export class Container {
       .filter((service) => service !== undefined);
 
     if (registeredServices.length !== params.length) {
+      console.log('params', params);
+      console.log('registeredServices', registeredServices);
       throw new Error('Not all parameters are registered services: ' + params.join(', '));
     }
 
@@ -178,7 +193,10 @@ export class Container {
         .filter((service) => service?.registrationType === 'transient');
 
       for (const service of transientServices) {
-        if (service?.teardown) await service.teardown();
+        if (service?.teardown) {
+          if (isClass) await services[service.teardown.name]();
+          else await service.teardown();
+        }
       }
     }
   }
@@ -255,7 +273,7 @@ export function scoped<TService>(
 
 export function transient<TService>(
   name: string,
-  impl: (...args: any[]) => Promise<TService>,
+  impl: Function,
   teardown?: (...args: any[]) => Promise<void>,
 ): RegisteredService<TService> {
   return {
