@@ -13,6 +13,47 @@ describe('Container class', () => {
     expect(() => Container.instance).toThrow('Container has not been initialized');
   });
 
+  test('Container should be able to initiate singleton classes', async () => {
+    const spy = jest.fn()
+    class TestClass {
+      constructor() { spy() }
+    }
+
+    await Container.getInstance([
+      singleton('testService', TestClass),
+    ]);
+
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  test('Container should be able to initiate singleton classes with dependencies', async () => {
+    const innerSpy = jest.fn()
+    const innerMethodSpy = jest.fn()
+
+    interface IInnerService { method(): void }
+    class InnerService implements IInnerService {
+      constructor() { innerSpy() }
+      method() { innerMethodSpy() }
+    }
+
+    const outerSpy = jest.fn()
+    class OuterService {
+      constructor(innerService: IInnerService) { 
+        outerSpy()
+        innerService.method()
+      }
+    }
+
+    await Container.getInstance([
+      singleton('innerService', InnerService),
+      singleton('outerService', OuterService),
+    ]);
+
+    expect(innerSpy).toHaveBeenCalledTimes(1);
+    expect(outerSpy).toHaveBeenCalledTimes(1);
+    expect(innerMethodSpy).toHaveBeenCalledTimes(1);
+  });
+
   test('Container should be able to initiate singleton services', async () => {
     const setupFn = jest.fn().mockResolvedValue({});
     const teardownFn = jest.fn().mockResolvedValue(undefined);

@@ -1,12 +1,7 @@
 import { describeTarget } from './describe-target';
 import { RequestScope } from './scoped-manager';
+import { RegisteredService, isConstructor } from './utils';
 
-export type RegisteredService<TService> = {
-  name: string;
-  type: 'singleton' | 'transient' | 'scoped';
-  setupFn: (...args: any[]) => Promise<TService>;
-  teardownFn?: (...args: any[]) => Promise<void>;
-};
 
 /**
  * Container for managing dependency injection
@@ -17,12 +12,12 @@ export type RegisteredService<TService> = {
  *   {
  *     name: 'logger',
  *     type: 'singleton',
- *     setupFn: async () => {
+ *     impl: async () => {
  *       const logger = new Logger();
  *       await logger.init();
  *       return logger;
  *     },
- *     teardownFn: async () => {
+ *     teardown: async () => {
  *       const logger = Container.instance.getSingleton('logger');
  *       await logger.close();
  *     }
@@ -44,7 +39,7 @@ export class Container {
   private _singletons = new Map<string, any>();
   private _services = new Map<string, RegisteredService<any>>();
 
-  private constructor() {}
+  private constructor() { }
 
   /**
    * Returns the singleton instance of the container
@@ -92,11 +87,11 @@ export class Container {
     }
 
     const singletons = Array.from(Container._instance._services.entries()).filter(
-      ([_, service]) => service.type === 'singleton',
+      ([_, service]) => service.registrationType === 'singleton',
     );
 
     for (const [serviceName, service] of singletons) {
-      if (service.teardownFn) await service.teardownFn();
+      if (service.teardown) await service.teardown();
       Container._instance._singletons.delete(serviceName);
     }
 
@@ -113,11 +108,11 @@ export class Container {
   public static async startScope(next: (...args) => any) {
     return RequestScope.run(async () => {
       const scopedServices = Array.from(Container._instance._services.entries()).filter(
-        ([_, service]) => service.type === 'scoped',
+        ([_, service]) => service.registrationType === 'scoped',
       );
 
       for (const [serviceName, service] of scopedServices) {
-        const instance = await this._instance.resolve(service.setupFn);
+        const instance = await this._instance.resolve(service.impl);
         RequestScope.setScoped(serviceName, instance);
       }
 
@@ -136,37 +131,13 @@ export class Container {
     }
 
     const scopedServices = Array.from(Container._instance._services.entries()).filter(
-      ([_, service]) => service.type === 'scoped',
+      ([_, service]) => service.registrationType === 'scoped',
     );
 
     for (const [serviceName, service] of scopedServices) {
       const instance = RequestScope.getScoped(serviceName);
-      if (instance && service.teardownFn) await service.teardownFn();
+      if (instance && service.teardown) await service.teardown();
       RequestScope.deleteKey(serviceName);
-    }
-  }
-
-  /**
-   * Injects services into the receiving function
-   * and tears down any transient services after
-   * the receiving function completes.
-   *
-   * @param receivingFn Function to inject services into
-   * @returns {Promise<(...args) => any>} The receiving function with services injected
-   */
-  public async inject(serviceNames: string[], receivingFn: (...args) => any): Promise<(...args) => any> {
-    const services = await Promise.all(serviceNames.map((serviceName) => this.getService(serviceName)));
-
-    try {
-      return receivingFn(...services);
-    } finally {
-      const transientServices = serviceNames
-        .map((serviceName) => this._services.get(serviceName))
-        .filter((service) => service?.type === 'transient');
-
-      for (const service of transientServices) {
-        if (service?.teardownFn) await service.teardownFn();
-      }
     }
   }
 
@@ -177,35 +148,46 @@ export class Container {
    * @returns {Promise<(...args) => any>} The resolved function
    * @throws {Error} If the function has parameters that are not registered services
    */
-  public async resolve(func: (...args) => any): Promise<(...args) => any> {
-    if (func.length === 0) {
-      return await func();
+  public async resolve(func: Function): Promise<Function> {
+    const isClass = isConstructor(func);
+    const params = describeTarget(func);
+
+    if (params.length === 0) {
+      return isClass
+        ? new func()
+        : await func();
     }
 
-    const params = describeTarget(func);
     const registeredServices = params
       .map((param) => this._services.get(param))
       .filter((service) => service !== undefined);
-
-    if (registeredServices.length === 0) {
-      return await func();
-    }
 
     if (registeredServices.length !== params.length) {
       throw new Error('Not all parameters are registered services: ' + params.join(', '));
     }
 
-    return await this.inject(
-      params,
-      func,
-    );
+    const services = await Promise.all(params.map((serviceName) => this.getService(serviceName)));
+
+    try {
+      return isClass
+        ? new func(...services)
+        : await func(...services);
+    } finally {
+      const transientServices = params
+        .map((serviceName) => this._services.get(serviceName))
+        .filter((service) => service?.registrationType === 'transient');
+
+      for (const service of transientServices) {
+        if (service?.teardown) await service.teardown();
+      }
+    }
   }
 
   private async setupSingletons(): Promise<void> {
-    const singletons = Array.from(this._services.entries()).filter(([_, service]) => service.type === 'singleton');
+    const singletons = Array.from(this._services.entries()).filter(([_, service]) => service.registrationType === 'singleton');
 
     for (const [serviceName, service] of singletons) {
-      const instance = await this.resolve(service.setupFn);
+      const instance = await this.resolve(service.impl);
       this._singletons.set(serviceName, instance);
     }
   }
@@ -217,7 +199,7 @@ export class Container {
     }
 
     // If the service is a singleton, return the singleton instance
-    if (service.type === 'singleton') {
+    if (service.registrationType === 'singleton') {
       const singletonService = this._singletons.get(serviceName);
       if (!singletonService) {
         throw new Error(`Singleton ${serviceName} not initialized`);
@@ -228,10 +210,10 @@ export class Container {
 
     // If the service is scoped, return a new instance if one does not exist
     // for the current scope, otherwise return the existing instance
-    if (service.type === 'scoped') {
+    if (service.registrationType === 'scoped') {
       const serviceInstance = RequestScope.getScoped(serviceName);
       if (!serviceInstance) {
-        const newInstance = await this.resolve(service.setupFn);
+        const newInstance = await this.resolve(service.impl);
         RequestScope.setScoped(serviceName, newInstance);
         return newInstance;
       }
@@ -240,46 +222,46 @@ export class Container {
     }
 
     // If the service is transient, return a new instance
-    const instance = await this.resolve(service.setupFn);
+    const instance = await this.resolve(service.impl);
     return instance;
   }
 }
 
 export function singleton<TService>(
   name: string,
-  setupFn: (...args: any[]) => Promise<TService>,
-  teardownFn?: (...args: any[]) => Promise<void>,
+  impl: Function,
+  teardown?: (...args: any[]) => Promise<void>,
 ): RegisteredService<TService> {
   return {
     name,
-    type: 'singleton',
-    setupFn,
-    teardownFn,
+    registrationType: 'singleton',
+    impl,
+    teardown,
   };
 }
 
 export function scoped<TService>(
   name: string,
-  setupFn: (...args: any[]) => Promise<TService>,
-  teardownFn?: (...args: any[]) => Promise<void>,
+  impl: Function,
+  teardown?: (...args: any[]) => Promise<void>,
 ): RegisteredService<TService> {
   return {
     name,
-    type: 'scoped',
-    setupFn,
-    teardownFn,
+    registrationType: 'scoped',
+    impl,
+    teardown,
   };
 }
 
 export function transient<TService>(
   name: string,
-  setupFn: (...args: any[]) => Promise<TService>,
-  teardownFn?: (...args: any[]) => Promise<void>,
+  impl: (...args: any[]) => Promise<TService>,
+  teardown?: (...args: any[]) => Promise<void>,
 ): RegisteredService<TService> {
   return {
     name,
-    type: 'transient',
-    setupFn,
-    teardownFn,
+    registrationType: 'transient',
+    impl,
+    teardown,
   };
 }
