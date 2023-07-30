@@ -11,20 +11,24 @@ describe('describeTarget function', () => {
   });
 
   test('should return an array of parameter names for a simple function', () => {
-    function simpleFunc(a, b, c) { return a + b + c; };
+    function simpleFunc(a, b, c) {
+      return a + b + c;
+    }
     expect(describeTarget(simpleFunc)).toEqual(['a', 'b', 'c']);
   });
 
   test('should return an array of class constructor', () => {
     class SimpleClass {
-      constructor(a, b, c) { }
+      constructor(a, b, c) {}
     }
 
     expect(describeTarget(SimpleClass)).toEqual(['a', 'b', 'c']);
   });
 
   test('should be able to handle async functions', () => {
-    async function simpleFunc(a, b, c) { return a + b + c; };
+    async function simpleFunc(a, b, c) {
+      return a + b + c;
+    }
     expect(describeTarget(simpleFunc)).toEqual(['a', 'b', 'c']);
   });
 
@@ -34,54 +38,58 @@ describe('describeTarget function', () => {
   });
 
   test('should handle functions with types', () => {
-    function simpleFunc(a: string, b: number, c: boolean) { return a + b + c; };
+    function simpleFunc(a: string, b: number, c: boolean) {
+      return a + b + c;
+    }
     expect(describeTarget(simpleFunc)).toEqual(['a', 'b', 'c']);
   });
 
   test('should handle functions with default values', () => {
-    function simpleFunc(a = 'a', b = 1, c = true) { return a + b + c; };
+    function simpleFunc(a = 'a', b = 1, c = true) {
+      return a + b + c;
+    }
     expect(describeTarget(simpleFunc)).toEqual(['a', 'b', 'c']);
   });
 
   test('should handle functions with default values and types', () => {
-    function simpleFunc(a: string = 'asdf', b: number = 2, c: boolean = false) { return a + b + c; };
+    function simpleFunc(a: string = 'asdf', b: number = 2, c: boolean = false) {
+      return a + b + c;
+    }
     expect(describeTarget(simpleFunc)).toEqual(['a', 'b', 'c']);
   });
 
   test('should handle functions with odd formatting', () => {
-    function simpleFunc(
-      a: string = 'asdf',
-      b: number = 2,
-      c: boolean = false
-    ) { return a + b + c; };
+    function simpleFunc(a: string = 'asdf', b: number = 2, c: boolean = false) {
+      return a + b + c;
+    }
     expect(describeTarget(simpleFunc)).toEqual(['a', 'b', 'c']);
   });
 
   test('should handle functions with odd formatting and no types', () => {
-    function simpleFunc(
-      a = 'asdf',
-      b = 2,
-      c = false
-    ) { return a + b + c; };
+    function simpleFunc(a = 'asdf', b = 2, c = false) {
+      return a + b + c;
+    }
     expect(describeTarget(simpleFunc)).toEqual(['a', 'b', 'c']);
   });
 
   test('should handle functions with odd formatting and no types and no default values', () => {
-    function simpleFunc(
-      a,
-      b,
-      c
-    ) { return a + b + c; };
+    function simpleFunc(a, b, c) {
+      return a + b + c;
+    }
     expect(describeTarget(simpleFunc)).toEqual(['a', 'b', 'c']);
   });
 
   test('should handle many dependencies', () => {
-    function simpleFunc( a, b, c, d, e, f, g, h, i, j) { return a + b + c + d + e + f + g + h + i + j; };
+    function simpleFunc(a, b, c, d, e, f, g, h, i, j) {
+      return a + b + c + d + e + f + g + h + i + j;
+    }
     expect(describeTarget(simpleFunc)).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']);
   });
 
   test('should handle zero dependencies', () => {
-    function simpleFunc() { return 1; };
+    function simpleFunc() {
+      return 1;
+    }
     expect(describeTarget(simpleFunc)).toEqual([]);
   });
 });

@@ -2,7 +2,6 @@ import { describeTarget } from './describe-target';
 import { RequestScope } from './scoped-manager';
 import { RegisteredService, isClass, isConstructor } from './utils';
 
-
 /**
  * Container for managing dependency injection
  *
@@ -39,7 +38,7 @@ export class Container {
   private _singletons = new Map<string, any>();
   private _services = new Map<string, RegisteredService<any>>();
 
-  private constructor() { }
+  private constructor() {}
 
   /**
    * Returns the singleton instance of the container
@@ -93,7 +92,7 @@ export class Container {
     for (const [serviceName, service] of singletons) {
       const singletonService = Container._instance._singletons.get(serviceName);
       if (service.teardown) {
-        if (isClass(service.impl)) await singletonService[service.teardown.name]()
+        if (isClass(service.impl)) await singletonService[service.teardown.name]();
         else await service.teardown();
       }
 
@@ -158,17 +157,11 @@ export class Container {
    * @throws {Error} If the function has parameters that are not registered services
    */
   public async resolve(func: Function): Promise<Function> {
-    const isClass = isConstructor(func);
+    const hasConstructor = isConstructor(func);
     const params = describeTarget(func);
 
     if (params.length === 0) {
-      try {
-        return isClass
-          ? new func()
-          : await func();
-      } catch (error) {
-
-      }
+      return hasConstructor ? new func() : await func();
     }
 
     const registeredServices = params
@@ -176,17 +169,13 @@ export class Container {
       .filter((service) => service !== undefined);
 
     if (registeredServices.length !== params.length) {
-      console.log('params', params);
-      console.log('registeredServices', registeredServices);
       throw new Error('Not all parameters are registered services: ' + params.join(', '));
     }
 
     const services = await Promise.all(params.map((serviceName) => this.getService(serviceName)));
 
     try {
-      return isClass
-        ? new func(...services)
-        : await func(...services);
+      return hasConstructor ? new func(...services) : await func(...services);
     } finally {
       const transientServices = params
         .map((serviceName) => this._services.get(serviceName))
@@ -194,7 +183,7 @@ export class Container {
 
       for (const service of transientServices) {
         if (service?.teardown) {
-          if (isClass) await services[service.teardown.name]();
+          if (hasConstructor) await services[service.teardown.name]();
           else await service.teardown();
         }
       }
@@ -202,7 +191,9 @@ export class Container {
   }
 
   private async setupSingletons(): Promise<void> {
-    const singletons = Array.from(this._services.entries()).filter(([_, service]) => service.registrationType === 'singleton');
+    const singletons = Array.from(this._services.entries()).filter(
+      ([_, service]) => service.registrationType === 'singleton',
+    );
 
     for (const [serviceName, service] of singletons) {
       const instance = await this.resolve(service.impl);

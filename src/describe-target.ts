@@ -1,8 +1,8 @@
 /**
  * Returns the parameters of a function as an array of strings.
- * 
+ *
  * @param func The function to describe
- * @returns 
+ * @returns
  */
 export function describeTarget(func: Function): string[] {
   const funcString = func.toString();
@@ -42,15 +42,14 @@ function parseParams(paramString: string) {
     .replace('\t', '')
     .split(',');
 
-    // Remove default values
-    for (let i = 0; i < params.length; i++) {
-      const param = params[i];
-      const equalIndex = param.indexOf('=');
-      if (equalIndex > -1) {
-        params[i] = param.substring(0, equalIndex);
-      }
+  // Remove default values
+  for (let i = 0; i < params.length; i++) {
+    const param = params[i];
+    const equalIndex = param.indexOf('=');
+    if (equalIndex > -1) {
+      params[i] = param.substring(0, equalIndex);
     }
+  }
 
-    return params
-      .filter((param) => !!param);
+  return params.filter((param) => !!param);
 }

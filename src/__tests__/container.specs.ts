@@ -14,40 +14,43 @@ describe('Container class', () => {
   });
 
   test('Container should be able to initiate singleton classes', async () => {
-    const spy = jest.fn()
+    const spy = jest.fn();
     class TestClass {
-      constructor() { spy() }
+      constructor() {
+        spy();
+      }
     }
 
-    await Container.getInstance([
-      singleton('testService', TestClass),
-    ]);
+    await Container.getInstance([singleton('testService', TestClass)]);
 
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
   test('Container should be able to initiate singleton classes with dependencies', async () => {
-    const innerSpy = jest.fn()
-    const innerMethodSpy = jest.fn()
+    const innerSpy = jest.fn();
+    const innerMethodSpy = jest.fn();
 
-    interface IInnerService { method(): void }
-    class InnerService implements IInnerService {
-      constructor() { innerSpy() }
-      method() { innerMethodSpy() }
+    interface IInnerService {
+      method(): void;
     }
-
-    const outerSpy = jest.fn()
-    class OuterService {
-      constructor(innerService: IInnerService) { 
-        outerSpy()
-        innerService.method()
+    class InnerService implements IInnerService {
+      constructor() {
+        innerSpy();
+      }
+      method() {
+        innerMethodSpy();
       }
     }
 
-    await Container.getInstance([
-      singleton('innerService', InnerService),
-      singleton('outerService', OuterService),
-    ]);
+    const outerSpy = jest.fn();
+    class OuterService {
+      constructor(innerService: IInnerService) {
+        outerSpy();
+        innerService.method();
+      }
+    }
+
+    await Container.getInstance([singleton('innerService', InnerService), singleton('outerService', OuterService)]);
 
     expect(innerSpy).toHaveBeenCalledTimes(1);
     expect(outerSpy).toHaveBeenCalledTimes(1);
@@ -58,9 +61,7 @@ describe('Container class', () => {
     const setupFn = jest.fn().mockResolvedValue({});
     const teardownFn = jest.fn().mockResolvedValue(undefined);
 
-    await Container.getInstance([
-      singleton('testService', setupFn, teardownFn),
-    ]);
+    await Container.getInstance([singleton('testService', setupFn, teardownFn)]);
 
     expect(setupFn).toHaveBeenCalledTimes(1);
   });
@@ -73,9 +74,7 @@ describe('Container class', () => {
       await callback();
     });
 
-    await Container.getInstance([
-      scoped('testService', setupFn, teardownFn),
-    ]);
+    await Container.getInstance([scoped('testService', setupFn, teardownFn)]);
 
     await Container.startScope(() => {});
 
@@ -87,12 +86,10 @@ describe('Container class', () => {
     const setupFn = jest.fn().mockResolvedValue(func);
     const teardownFn = jest.fn().mockResolvedValue(undefined);
 
-    await Container.getInstance([
-      transient('testService', setupFn, teardownFn),
-    ]);
+    await Container.getInstance([transient('testService', setupFn, teardownFn)]);
 
-    await Container.instance.resolve(async (testService) => { 
-      await testService(); 
+    await Container.instance.resolve(async (testService) => {
+      await testService();
     });
 
     expect(func).toHaveBeenCalledTimes(1);
@@ -119,13 +116,11 @@ describe('Container class', () => {
       }
     }
 
-    await Container.getInstance([
-      transient('testClass', TestClass, TestClass.prototype.teardown),
-    ]);
+    await Container.getInstance([transient('testClass', TestClass, TestClass.prototype.teardown)]);
 
     let tornDown;
-    await Container.instance.resolve(async (testClass: TestClass) => { 
-      tornDown = await testClass.method(); 
+    await Container.instance.resolve(async (testClass: TestClass) => {
+      tornDown = await testClass.method();
     });
 
     expect(tornDown).toBe(false);
@@ -134,19 +129,26 @@ describe('Container class', () => {
   });
 
   test('Container should be able to teardown multiple transient services after use', async () => {
-    
     const methodSpy = jest.fn().mockResolvedValue({});
     const teardownSpy = jest.fn().mockResolvedValue({});
     class TestClass {
-      async method() { await methodSpy(); }
-      async teardown() { teardownSpy(); }
+      async method() {
+        await methodSpy();
+      }
+      async teardown() {
+        teardownSpy();
+      }
     }
 
     const otherMethodSpy = jest.fn().mockResolvedValue({});
     const otherTeardownSpy = jest.fn().mockResolvedValue({});
     class OtherTestClass {
-      async method() { await otherMethodSpy(); }
-      async teardown() { otherTeardownSpy(); }
+      async method() {
+        await otherMethodSpy();
+      }
+      async teardown() {
+        otherTeardownSpy();
+      }
     }
 
     await Container.getInstance([
@@ -154,9 +156,9 @@ describe('Container class', () => {
       transient('otherTestClass', OtherTestClass, OtherTestClass.prototype.teardown),
     ]);
 
-    await Container.instance.resolve(async (testClass: TestClass, otherTestClass: OtherTestClass) => { 
-      await testClass.method(); 
-      await otherTestClass.method(); 
+    await Container.instance.resolve(async (testClass: TestClass, otherTestClass: OtherTestClass) => {
+      await testClass.method();
+      await otherTestClass.method();
     });
 
     expect(methodSpy).toHaveBeenCalledTimes(1);
@@ -173,16 +175,16 @@ describe('Container class', () => {
     const dependencyFn = async (deepDependency) => async () => {
       await deepDependency();
       dependencySpy();
-    }
+    };
 
     const deepDependencyFn = async (deeperDependency) => async () => {
       await deeperDependency();
       deepDependencySpy();
-    }
+    };
 
     const deeperDependencyFn = async () => async () => {
       deeperDependencySpy();
-    }
+    };
 
     await Container.getInstance([
       transient('dependency', dependencyFn),
@@ -199,7 +201,6 @@ describe('Container class', () => {
     expect(deeperDependencySpy).toHaveBeenCalledTimes(1);
   });
 
-
   test('Container should be able to inject dependencies without async', async () => {
     const dependencySpy = jest.fn().mockResolvedValue({});
     const deepDependencySpy = jest.fn().mockResolvedValue({});
@@ -208,16 +209,16 @@ describe('Container class', () => {
     const dependencyFn = (deepDependency) => () => {
       deepDependency();
       dependencySpy();
-    }
+    };
 
     const deepDependencyFn = (deeperDependency) => () => {
       deeperDependency();
       deepDependencySpy();
-    }
+    };
 
     const deeperDependencyFn = () => () => {
       deeperDependencySpy();
-    }
+    };
 
     Container.getInstance([
       transient('dependency', dependencyFn),
