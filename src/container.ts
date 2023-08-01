@@ -44,16 +44,14 @@ export class Container {
   private _registrations = new Map<string, RegisteredService<any>>();
 
   private constructor(config?: WiredUpContainerConfig) {
-    this._config = !config 
-      ? getDefaultContainerConfig()
-      : { ...getDefaultContainerConfig(), ...config };
+    this._config = !config ? getDefaultContainerConfig() : { ...getDefaultContainerConfig(), ...config };
 
     if (config?.logLevel) {
-      console.log(`WiredUp: Logging level set to ${config.logLevel}`);
+      this.log(`Logging level set to ${config.logLevel}`);
     }
 
     if (config?.lazyLoad === false) {
-      console.log('WiredUp: Lazy loading disabled');
+      this.log('Lazy loading disabled');
     }
   }
 
@@ -72,7 +70,7 @@ export class Container {
 
   /**
    * Initializes the container and provides a fluent interface for registering services
-   * 
+   *
    * @returns {RegistrationBuilder} Fluent interface for registering services
    */
   public static register(config?: WiredUpContainerConfig) {
@@ -85,7 +83,7 @@ export class Container {
 
   /**
    * Initializes the container and registers services
-   * 
+   *
    * @param services Services to register with the container
    * @param config Configuration for the container
    * @returns {Promise<Container>} The singleton instance of the container
@@ -119,7 +117,9 @@ export class Container {
 
     // Throw error if a service if there are duplicate service names
     const serviceNames = sortedServices.map((service) => service.name);
-    const duplicateServiceNames = serviceNames.filter((serviceName, index) => serviceNames.indexOf(serviceName) !== index);
+    const duplicateServiceNames = serviceNames.filter(
+      (serviceName, index) => serviceNames.indexOf(serviceName) !== index,
+    );
     if (duplicateServiceNames.length > 0) {
       throw new Error(`Duplicate service names: ${duplicateServiceNames.join(', ')}`);
     }
@@ -144,7 +144,7 @@ export class Container {
 
   /**
    * Returns all registered services
-   * 
+   *
    * @returns {RegisteredService<any>[]} All registered services
    * @throws {Error} If the container has not been initialized
    */
@@ -154,7 +154,7 @@ export class Container {
 
   /**
    * Static access to all registered services
-   * 
+   *
    * @returns {RegisteredService<any>[]} All registered services
    * @throws {Error} If the container has not been initialized
    */
@@ -173,7 +173,7 @@ export class Container {
    */
   public static async destroy() {
     if (!Container._instance) {
-      throw new Error('Container has not been initialized');
+      return;
     }
 
     const singletons = Array.from(Container._instance._singletons.entries()).filter(
@@ -201,12 +201,18 @@ export class Container {
    * @returns {Promise<any>} The result of the callback function
    */
   public static async startScope(next: (...args) => any) {
+    if (!Container._instance) {
+      throw new Error('Container has not been initialized');
+    }
+
+    Container._instance.log('Starting scope');
     return RequestScope.run(async () => {
       const scopedServices = Array.from(Container._instance._registrations.entries()).filter(
         ([_, service]) => service.registrationType === 'scoped',
       );
 
       for (const [serviceName, service] of scopedServices) {
+        Container._instance.log(`Instantiating scoped ${serviceName}; Dependencies: ${service.dependencies}`);
         const instance = await this._instance.resolve(service.impl, service.dependencies);
         RequestScope.setScoped(serviceName, instance);
       }
@@ -295,11 +301,12 @@ export class Container {
 
     // If the service is a singleton, return the singleton instance
     if (service.registrationType === 'singleton') {
-      if (!this._singletons[serviceName]) {
-        this._singletons[serviceName] = await this.resolve(service.impl, service.dependencies);
+      if (!this._singletons.has(serviceName)) {
+        this.log(`Instantiating singleton ${serviceName}; Dependencies: ${service.dependencies}`);
+        this._singletons.set(serviceName, await this.resolve(service.impl, service.dependencies));
       }
 
-      return this._singletons[serviceName];
+      return this._singletons.get(serviceName);
     }
 
     // If the service is scoped, return a new instance if one does not exist
@@ -307,6 +314,7 @@ export class Container {
     if (service.registrationType === 'scoped') {
       const serviceInstance = RequestScope.getScoped(serviceName);
       if (!serviceInstance) {
+        this.log(`Instantiating scoped ${serviceName}; Dependencies: ${service.dependencies}`);
         const newInstance = await this.resolve(service.impl, service.dependencies);
         RequestScope.setScoped(serviceName, newInstance);
         return newInstance;
@@ -316,6 +324,7 @@ export class Container {
     }
 
     // If the service is transient, return a new instance
+    this.log(`Instantiating transient ${serviceName}; Dependencies: ${service.dependencies}`);
     const instance = await this.resolve(service.impl, service.dependencies);
     return instance;
   }
@@ -326,8 +335,15 @@ export class Container {
     );
 
     for (const [serviceName, service] of singletons) {
+      this.log(`Instantiating singleton ${serviceName}; Dependencies: ${service.dependencies}`);
       const instance = await this.resolve(service.impl, service.dependencies);
       this._singletons.set(serviceName, instance);
+    }
+  }
+
+  private log(message: string, level: 'debug' | 'info' | 'warn' | 'error' = 'info') {
+    if (this._config?.logLevel === 'debug' || this._config?.logLevel === level) {
+      console[level](`WiredUp: ${message}`);
     }
   }
 }

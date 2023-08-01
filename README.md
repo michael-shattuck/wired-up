@@ -78,11 +78,11 @@ import * as db from './core/db';
 import * as logger from './core/logger';
 import { deeperFunction } from './core/deeper';
 
-await Container.init([
-  singleton('db', db.createConnection, db.closeConnection),
-  scoped('logger', logger.createLogger),
-  transient('deeperFunction', deeperFunction),
-]);
+await Container.register()
+  .singleton('db', db.createConnection, db.closeConnection)
+  .scoped('logger', logger.createLogger)
+  .transient('deeperFunction', deeperFunction)
+  .build();
 ```
 
 We can then resolve the dependencies and run the outer function without needing to worry about a significant amout of additional boiler plate.

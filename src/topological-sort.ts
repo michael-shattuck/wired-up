@@ -1,4 +1,4 @@
-import { RegisteredService } from "./utils";
+import { RegisteredService } from './utils';
 
 export class Graph {
   nodes: Set<any>;
@@ -29,41 +29,42 @@ export function sortTopologically(registrations: RegisteredService<any>[]): Regi
   const graph = new Graph();
 
   // Add services as nodes
-  for (let registration of registrations) {
+  for (const registration of registrations) {
     graph.addNode(registration);
   }
-
-  // Add dependency edges 
-  for (let registration of registrations) {
-    for (let dependency of registration.dependencies) {
+  // Add dependency edges
+  for (const registration of registrations) {
+    for (const dependency of registration.dependencies) {
       graph.addEdge(registration, dependency);
     }
   }
 
-  const sorted: RegisteredService<any>[] = [];
-  const visited = new Set();
+  return registrations;
 
-  function visit(node: RegisteredService<any>) {
-    if (!graph.nodes.has(node)) {
-      throw new Error('Graph has unknown node');
-    }
+  // const sorted: RegisteredService<any>[] = [];
+  // const visited = new Set();
 
-    if (visited.has(node)) {
-      return;
-    }
+  // function visit(node: RegisteredService<any>) {
+  //   if (!graph.nodes.has(node)) {
+  //     throw new Error('Graph has unknown node');
+  //   }
 
-    visited.add(node);
+  //   if (visited.has(node)) {
+  //     return;
+  //   }
 
-    for (const dependency of graph.dependenciesOf(node)) {
-      visit(dependency);
-    }
+  //   visited.add(node);
 
-    sorted.unshift(node);
-  }
+  //   for (const dependency of graph.dependenciesOf(node)) {
+  //     visit(dependency);
+  //   }
 
-  for (const node of graph.nodes) {
-    visit(node);
-  }
+  //   sorted.unshift(node);
+  // }
 
-  return sorted;
+  // for (const node of graph.nodes) {
+  //   visit(node);
+  // }
+
+  // return sorted;
 }

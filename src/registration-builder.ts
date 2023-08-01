@@ -1,6 +1,6 @@
-import { Container } from "./container";
-import { describeTarget } from "./describe-target";
-import { RegisteredService } from "./utils";
+import { Container } from './container';
+import { describeTarget } from './describe-target';
+import { RegisteredService } from './utils';
 
 export class RegistrationBuilder {
   container: Container;
@@ -13,16 +13,19 @@ export class RegistrationBuilder {
   public singleton(name, impl, teardown?: (...args: any[]) => Promise<void>) {
     const registration = singleton(name, impl, teardown);
     this.registrations.push(registration);
+    return this;
   }
 
   public transient(name, impl, teardown?: (...args: any[]) => Promise<void>) {
     const registration = transient(name, impl, teardown);
     this.registrations.push(registration);
+    return this;
   }
 
   public scoped(name, impl, teardown?: (...args: any[]) => Promise<void>) {
     const registration = scoped(name, impl, teardown);
     this.registrations.push(registration);
+    return this;
   }
 
   public build() {
