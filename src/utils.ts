@@ -3,6 +3,7 @@ export type RegisteredService<TService> = {
   registrationType: 'singleton' | 'transient' | 'scoped';
   impl: Function;
   teardown?: (...args: any[]) => Promise<void>;
+  dependencies: string[];
 };
 
 export function isClass(obj: any): boolean {

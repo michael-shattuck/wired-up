@@ -1,6 +1,7 @@
 import { WiredUpContainerConfig } from './config';
 import { describeTarget } from './describe-target';
 import { RequestScope } from './scoped-manager';
+import { Graph, sortTopologically } from './topological-sort';
 import { RegisteredService, isClass, isConstructor } from './utils';
 
 /**
@@ -39,7 +40,7 @@ export class Container {
   private _singletons = new Map<string, any>();
   private _services = new Map<string, RegisteredService<any>>();
 
-  private constructor() {}
+  private constructor() { }
 
   /**
    * Returns the singleton instance of the container
@@ -67,8 +68,11 @@ export class Container {
       Container._instance = new Container();
     }
 
+    // Sort services topologically
+    const sortedServices = sortTopologically(services);
+
     // Throw error if a service if there are duplicate service names
-    const serviceNames = services.map((service) => service.name);
+    const serviceNames = sortedServices.map((service) => service.name);
     const duplicateServiceNames = serviceNames.filter((serviceName, index) => serviceNames.indexOf(serviceName) !== index);
     if (duplicateServiceNames.length > 0) {
       throw new Error(`Duplicate service names: ${duplicateServiceNames.join(', ')}`);
@@ -81,7 +85,7 @@ export class Container {
       throw new Error(`Service already registered: ${duplicateRegistrations.join(', ')}`);
     }
 
-    for (const service of services) {
+    for (const service of sortedServices) {
       Container._instance._services.set(service.name, service);
     }
 
@@ -94,6 +98,17 @@ export class Container {
 
   /**
    * Returns all registered services
+   * 
+   * @returns {RegisteredService<any>[]} All registered services
+   * @throws {Error} If the container has not been initialized
+   */
+  public get registrations() {
+    return Array.from(Container._instance._services.values());
+  }
+
+  /**
+   * Static access to all registered services
+   * 
    * @returns {RegisteredService<any>[]} All registered services
    * @throws {Error} If the container has not been initialized
    */
@@ -102,7 +117,7 @@ export class Container {
       throw new Error('Container has not been initialized. Please call the init() method first.');
     }
 
-    return Array.from(Container._instance._services.values()); 
+    return Array.from(Container._instance.registrations);
   }
 
   /**
@@ -146,7 +161,7 @@ export class Container {
       );
 
       for (const [serviceName, service] of scopedServices) {
-        const instance = await this._instance.resolve(service.impl);
+        const instance = await this._instance.resolve(service.impl, service.dependencies);
         RequestScope.setScoped(serviceName, instance);
       }
 
@@ -186,9 +201,9 @@ export class Container {
    * @returns {Promise<(...args) => any>} The resolved function
    * @throws {Error} If the function has parameters that are not registered services
    */
-  public async resolve(func: Function): Promise<Function> {
+  public async resolve(func: Function, dependencies?: string[]): Promise<Function> {
     const hasConstructor = isConstructor(func);
-    const params = describeTarget(func);
+    const params = dependencies || describeTarget(func);
 
     if (params.length === 0) {
       return hasConstructor ? new func() : await func();
@@ -235,7 +250,7 @@ export class Container {
     // If the service is a singleton, return the singleton instance
     if (service.registrationType === 'singleton') {
       if (!this._singletons[serviceName]) {
-        this._singletons[serviceName] = await this.resolve(this._services[serviceName].impl);  
+        this._singletons[serviceName] = await this.resolve(service.impl, service.dependencies);
       }
 
       return this._singletons[serviceName];
@@ -246,7 +261,7 @@ export class Container {
     if (service.registrationType === 'scoped') {
       const serviceInstance = RequestScope.getScoped(serviceName);
       if (!serviceInstance) {
-        const newInstance = await this.resolve(service.impl);
+        const newInstance = await this.resolve(service.impl, service.dependencies);
         RequestScope.setScoped(serviceName, newInstance);
         return newInstance;
       }
@@ -255,7 +270,7 @@ export class Container {
     }
 
     // If the service is transient, return a new instance
-    const instance = await this.resolve(service.impl);
+    const instance = await this.resolve(service.impl, service.dependencies);
     return instance;
   }
 
@@ -265,7 +280,7 @@ export class Container {
     );
 
     for (const [serviceName, service] of singletons) {
-      const instance = await this.resolve(service.impl);
+      const instance = await this.resolve(service.impl, service.dependencies);
       this._singletons.set(serviceName, instance);
     }
   }
@@ -281,6 +296,7 @@ export function singleton<TService>(
     registrationType: 'singleton',
     impl,
     teardown,
+    dependencies: describeTarget(impl),
   };
 }
 
@@ -294,6 +310,7 @@ export function scoped<TService>(
     registrationType: 'scoped',
     impl,
     teardown,
+    dependencies: describeTarget(impl),
   };
 }
 
@@ -307,5 +324,6 @@ export function transient<TService>(
     registrationType: 'transient',
     impl,
     teardown,
+    dependencies: describeTarget(impl),
   };
 }
