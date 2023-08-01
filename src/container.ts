@@ -1,3 +1,4 @@
+import { WiredUpContainerConfig } from './config';
 import { describeTarget } from './describe-target';
 import { RequestScope } from './scoped-manager';
 import { RegisteredService, isClass, isConstructor } from './utils';
@@ -47,7 +48,7 @@ export class Container {
    */
   public static get instance(): Container {
     if (!Container._instance) {
-      throw new Error('Container has not been initialized');
+      throw new Error('Container has not been initialized. Please call the init() method first.');
     }
 
     return Container._instance;
@@ -61,18 +62,47 @@ export class Container {
    * @throws {Error} If a service with the same name has already been registered
    * @returns {Promise<Container>} The singleton instance of the container
    */
-  public static async init(services: RegisteredService<any>[]): Promise<Container> {
+  public static async init(services: RegisteredService<any>[], config?: WiredUpContainerConfig): Promise<Container> {
     if (!Container._instance) {
       Container._instance = new Container();
+    }
+
+    // Throw error if a service if there are duplicate service names
+    const serviceNames = services.map((service) => service.name);
+    const duplicateServiceNames = serviceNames.filter((serviceName, index) => serviceNames.indexOf(serviceName) !== index);
+    if (duplicateServiceNames.length > 0) {
+      throw new Error(`Duplicate service names: ${duplicateServiceNames.join(', ')}`);
+    }
+
+    // Throw error if a service has already been registered
+    const registeredServiceNames = Array.from(Container._instance._services.keys());
+    const duplicateRegistrations = serviceNames.filter((serviceName) => registeredServiceNames.includes(serviceName));
+    if (duplicateRegistrations.length > 0) {
+      throw new Error(`Service already registered: ${duplicateRegistrations.join(', ')}`);
     }
 
     for (const service of services) {
       Container._instance._services.set(service.name, service);
     }
 
-    await Container._instance.setupSingletons();
+    if (config?.lazyLoad === false) {
+      await Container._instance.setupSingletons();
+    }
 
     return Container._instance;
+  }
+
+  /**
+   * Returns all registered services
+   * @returns {RegisteredService<any>[]} All registered services
+   * @throws {Error} If the container has not been initialized
+   */
+  public static get registrations() {
+    if (!Container._instance) {
+      throw new Error('Container has not been initialized. Please call the init() method first.');
+    }
+
+    return Array.from(Container._instance._services.values()); 
   }
 
   /**
@@ -204,12 +234,11 @@ export class Container {
 
     // If the service is a singleton, return the singleton instance
     if (service.registrationType === 'singleton') {
-      const singletonService = this._singletons.get(serviceName);
-      if (!singletonService) {
-        throw new Error(`Singleton ${serviceName} not initialized`);
+      if (!this._singletons[serviceName]) {
+        this._singletons[serviceName] = await this.resolve(this._services[serviceName].impl);  
       }
 
-      return singletonService;
+      return this._singletons[serviceName];
     }
 
     // If the service is scoped, return a new instance if one does not exist
