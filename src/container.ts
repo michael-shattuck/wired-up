@@ -1,7 +1,8 @@
-import { WiredUpContainerConfig } from './config';
+import { WiredUpContainerConfig, getDefaultContainerConfig } from './config';
 import { describeTarget } from './describe-target';
+import { RegistrationBuilder } from './registration-builder';
 import { RequestScope } from './scoped-manager';
-import { Graph, sortTopologically } from './topological-sort';
+import { sortTopologically } from './topological-sort';
 import { RegisteredService, isClass, isConstructor } from './utils';
 
 /**
@@ -37,10 +38,24 @@ import { RegisteredService, isClass, isConstructor } from './utils';
  */
 export class Container {
   private static _instance: Container;
+  private _config: WiredUpContainerConfig;
+  private _initialized = false;
   private _singletons = new Map<string, any>();
-  private _services = new Map<string, RegisteredService<any>>();
+  private _registrations = new Map<string, RegisteredService<any>>();
 
-  private constructor() { }
+  private constructor(config?: WiredUpContainerConfig) {
+    this._config = !config 
+      ? getDefaultContainerConfig()
+      : { ...getDefaultContainerConfig(), ...config };
+
+    if (config?.logLevel) {
+      console.log(`WiredUp: Logging level set to ${config.logLevel}`);
+    }
+
+    if (config?.lazyLoad === false) {
+      console.log('WiredUp: Lazy loading disabled');
+    }
+  }
 
   /**
    * Returns the singleton instance of the container
@@ -56,20 +71,51 @@ export class Container {
   }
 
   /**
-   * Initializes the singleton instance of the container
-   *
+   * Initializes the container and provides a fluent interface for registering services
+   * 
+   * @returns {RegistrationBuilder} Fluent interface for registering services
+   */
+  public static register(config?: WiredUpContainerConfig) {
+    if (!Container._instance) {
+      Container._instance = new Container(config);
+    }
+
+    return new RegistrationBuilder(Container.instance);
+  }
+
+  /**
+   * Initializes the container and registers services
+   * 
    * @param services Services to register with the container
+   * @param config Configuration for the container
+   * @returns {Promise<Container>} The singleton instance of the container
    * @throws {Error} If the container has already been initialized
    * @throws {Error} If a service with the same name has already been registered
    * @returns {Promise<Container>} The singleton instance of the container
    */
   public static async init(services: RegisteredService<any>[], config?: WiredUpContainerConfig): Promise<Container> {
     if (!Container._instance) {
-      Container._instance = new Container();
+      Container._instance = new Container(config);
+    }
+
+    return await Container._instance.build(services);
+  }
+
+  /**
+   * Builds the container and registers services
+   *
+   * @param services Services to register with the container
+   * @throws {Error} If the container has already been initialized
+   * @throws {Error} If a service with the same name has already been registered
+   * @returns {Promise<Container>} The singleton instance of the container
+   */
+  public async build(services: RegisteredService<any>[]): Promise<Container> {
+    if (this._initialized) {
+      throw new Error('Container has already been initialized');
     }
 
     // Sort services topologically
-    const sortedServices = sortTopologically(services);
+    const sortedServices = sortTopologically([...this.registrations, ...services]);
 
     // Throw error if a service if there are duplicate service names
     const serviceNames = sortedServices.map((service) => service.name);
@@ -79,21 +125,21 @@ export class Container {
     }
 
     // Throw error if a service has already been registered
-    const registeredServiceNames = Array.from(Container._instance._services.keys());
+    const registeredServiceNames = Array.from(this._registrations.keys());
     const duplicateRegistrations = serviceNames.filter((serviceName) => registeredServiceNames.includes(serviceName));
     if (duplicateRegistrations.length > 0) {
       throw new Error(`Service already registered: ${duplicateRegistrations.join(', ')}`);
     }
 
     for (const service of sortedServices) {
-      Container._instance._services.set(service.name, service);
+      this._registrations.set(service.name, service);
     }
 
-    if (config?.lazyLoad === false) {
-      await Container._instance.setupSingletons();
+    if (this._config?.lazyLoad === false) {
+      await this.setupSingletons();
     }
 
-    return Container._instance;
+    return this;
   }
 
   /**
@@ -103,7 +149,7 @@ export class Container {
    * @throws {Error} If the container has not been initialized
    */
   public get registrations() {
-    return Array.from(Container._instance._services.values());
+    return Array.from(Container._instance._registrations.values());
   }
 
   /**
@@ -144,7 +190,7 @@ export class Container {
       Container._instance._singletons.delete(serviceName);
     }
 
-    Container._instance._services.clear();
+    Container._instance._registrations.clear();
   }
 
   /**
@@ -156,7 +202,7 @@ export class Container {
    */
   public static async startScope(next: (...args) => any) {
     return RequestScope.run(async () => {
-      const scopedServices = Array.from(Container._instance._services.entries()).filter(
+      const scopedServices = Array.from(Container._instance._registrations.entries()).filter(
         ([_, service]) => service.registrationType === 'scoped',
       );
 
@@ -179,7 +225,7 @@ export class Container {
       throw new Error('Container has not been initialized');
     }
 
-    const scopedServices = Array.from(Container._instance._services.entries()).filter(
+    const scopedServices = Array.from(Container._instance._registrations.entries()).filter(
       ([_, service]) => service.registrationType === 'scoped',
     );
 
@@ -210,7 +256,7 @@ export class Container {
     }
 
     const registeredServices = params
-      .map((param) => this._services.get(param))
+      .map((param) => this._registrations.get(param))
       .filter((service) => service !== undefined);
 
     if (registeredServices.length !== params.length) {
@@ -223,7 +269,7 @@ export class Container {
       return hasConstructor ? new func(...services) : await func(...services);
     } finally {
       const transientServices = params
-        .map((serviceName) => this._services.get(serviceName))
+        .map((serviceName) => this._registrations.get(serviceName))
         .filter((service) => service?.registrationType === 'transient');
 
       for (const service of transientServices) {
@@ -242,7 +288,7 @@ export class Container {
    * @returns
    */
   public async getService(serviceName: string): Promise<any> {
-    const service = this._services.get(serviceName);
+    const service = this._registrations.get(serviceName);
     if (!service) {
       throw new Error(`Service ${serviceName} not registered`);
     }
@@ -275,7 +321,7 @@ export class Container {
   }
 
   private async setupSingletons(): Promise<void> {
-    const singletons = Array.from(this._services.entries()).filter(
+    const singletons = Array.from(this._registrations.entries()).filter(
       ([_, service]) => service.registrationType === 'singleton',
     );
 
@@ -284,46 +330,4 @@ export class Container {
       this._singletons.set(serviceName, instance);
     }
   }
-}
-
-export function singleton<TService>(
-  name: string,
-  impl: Function,
-  teardown?: (...args: any[]) => Promise<void>,
-): RegisteredService<TService> {
-  return {
-    name,
-    registrationType: 'singleton',
-    impl,
-    teardown,
-    dependencies: describeTarget(impl),
-  };
-}
-
-export function scoped<TService>(
-  name: string,
-  impl: Function,
-  teardown?: (...args: any[]) => Promise<void>,
-): RegisteredService<TService> {
-  return {
-    name,
-    registrationType: 'scoped',
-    impl,
-    teardown,
-    dependencies: describeTarget(impl),
-  };
-}
-
-export function transient<TService>(
-  name: string,
-  impl: Function,
-  teardown?: (...args: any[]) => Promise<void>,
-): RegisteredService<TService> {
-  return {
-    name,
-    registrationType: 'transient',
-    impl,
-    teardown,
-    dependencies: describeTarget(impl),
-  };
 }
