@@ -244,17 +244,15 @@ describe('Container class', () => {
       return 1;
     };
 
-    Container.init([
-      transient('dependency', dependencyFn),
-    ]);
+    Container.init([transient('dependency', dependencyFn)]);
 
     const resolvedFn = await Container.instance.resolve((dependency: Dependency) => async () => {
       const nestedFn = async () => {
         nestedSpy();
         return 1;
-      }
-        
-      return await dependency() + await nestedFn();
+      };
+
+      return (await dependency()) + (await nestedFn());
     });
 
     const response = await resolvedFn();

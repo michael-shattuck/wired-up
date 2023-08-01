@@ -192,9 +192,9 @@ export class Container {
 
   /**
    * Retrieve an injected instance of the requested service.
-   * 
+   *
    * @param serviceName Name of the service to get
-   * @returns 
+   * @returns
    */
   public async getService(serviceName: string): Promise<any> {
     const service = this._services.get(serviceName);
