@@ -4,7 +4,7 @@ import { Container, singleton, transient, scoped } from '../src';
 import { deeperFunction, excellentFunction } from './core/child';
 
 async function run() {
-  await Container.getInstance([
+  await Container.init([
     singleton('db', db.createConnection, db.closeConnection),
     scoped('logger', logger.createLogger),
     transient('deeperFunction', deeperFunction),

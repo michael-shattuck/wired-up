@@ -21,7 +21,7 @@ describe('Container class', () => {
       }
     }
 
-    await Container.getInstance([singleton('testService', TestClass)]);
+    await Container.init([singleton('testService', TestClass)]);
 
     expect(spy).toHaveBeenCalledTimes(1);
   });
@@ -50,7 +50,7 @@ describe('Container class', () => {
       }
     }
 
-    await Container.getInstance([singleton('innerService', InnerService), singleton('outerService', OuterService)]);
+    await Container.init([singleton('innerService', InnerService), singleton('outerService', OuterService)]);
 
     expect(innerSpy).toHaveBeenCalledTimes(1);
     expect(outerSpy).toHaveBeenCalledTimes(1);
@@ -61,7 +61,7 @@ describe('Container class', () => {
     const setupFn = jest.fn().mockResolvedValue({});
     const teardownFn = jest.fn().mockResolvedValue(undefined);
 
-    await Container.getInstance([singleton('testService', setupFn, teardownFn)]);
+    await Container.init([singleton('testService', setupFn, teardownFn)]);
 
     expect(setupFn).toHaveBeenCalledTimes(1);
   });
@@ -74,7 +74,7 @@ describe('Container class', () => {
       await callback();
     });
 
-    await Container.getInstance([scoped('testService', setupFn, teardownFn)]);
+    await Container.init([scoped('testService', setupFn, teardownFn)]);
 
     await Container.startScope(() => {});
 
@@ -86,7 +86,7 @@ describe('Container class', () => {
     const setupFn = jest.fn().mockResolvedValue(func);
     const teardownFn = jest.fn().mockResolvedValue(undefined);
 
-    await Container.getInstance([transient('testService', setupFn, teardownFn)]);
+    await Container.init([transient('testService', setupFn, teardownFn)]);
 
     await Container.instance.resolve(async (testService) => {
       await testService();
@@ -116,7 +116,7 @@ describe('Container class', () => {
       }
     }
 
-    await Container.getInstance([transient('testClass', TestClass, TestClass.prototype.teardown)]);
+    await Container.init([transient('testClass', TestClass, TestClass.prototype.teardown)]);
 
     let tornDown;
     await Container.instance.resolve(async (testClass: TestClass) => {
@@ -151,7 +151,7 @@ describe('Container class', () => {
       }
     }
 
-    await Container.getInstance([
+    await Container.init([
       transient('testClass', TestClass, TestClass.prototype.teardown),
       transient('otherTestClass', OtherTestClass, OtherTestClass.prototype.teardown),
     ]);
@@ -186,7 +186,7 @@ describe('Container class', () => {
       deeperDependencySpy();
     };
 
-    await Container.getInstance([
+    await Container.init([
       transient('dependency', dependencyFn),
       transient('deepDependency', deepDependencyFn),
       transient('deeperDependency', deeperDependencyFn),
@@ -220,7 +220,7 @@ describe('Container class', () => {
       deeperDependencySpy();
     };
 
-    Container.getInstance([
+    Container.init([
       transient('dependency', dependencyFn),
       transient('deepDependency', deepDependencyFn),
       transient('deeperDependency', deeperDependencyFn),
@@ -233,5 +233,34 @@ describe('Container class', () => {
     expect(dependencySpy).toHaveBeenCalledTimes(1);
     expect(deepDependencySpy).toHaveBeenCalledTimes(1);
     expect(deeperDependencySpy).toHaveBeenCalledTimes(1);
+  });
+
+  test('Container should be able to inject dependencies in functions with nested functions', async () => {
+    type Dependency = () => Promise<number>;
+    const nestedSpy = jest.fn();
+    const dependencySpy = jest.fn();
+    const dependencyFn = (): Dependency => async () => {
+      dependencySpy();
+      return 1;
+    };
+
+    Container.init([
+      transient('dependency', dependencyFn),
+    ]);
+
+    const resolvedFn = await Container.instance.resolve((dependency: Dependency) => async () => {
+      const nestedFn = async () => {
+        nestedSpy();
+        return 1;
+      }
+        
+      return await dependency() + await nestedFn();
+    });
+
+    const response = await resolvedFn();
+
+    expect(dependencySpy).toHaveBeenCalledTimes(1);
+    expect(nestedSpy).toHaveBeenCalledTimes(1);
+    expect(response).toEqual(2);
   });
 });

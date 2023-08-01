@@ -92,4 +92,37 @@ describe('describeTarget function', () => {
     }
     expect(describeTarget(simpleFunc)).toEqual([]);
   });
+
+  test('should handle standard functions with nested functions', () => {
+    function simpleFunc(a, b, c) {
+      function nestedFunc(d, e, f) {
+        return d + e + f;
+      }
+      return a + b + c + nestedFunc(1, 2, 3);
+    }
+
+    expect(describeTarget(simpleFunc)).toEqual(['a', 'b', 'c']);
+  });
+
+  test('should handle arrow functions with nested functions', () => {
+    const simpleFunc = (a, b, c) => {
+      const nestedFunc = (d, e, f) => {
+        return d + e + f;
+      }
+      return a + b + c + nestedFunc(1, 2, 3);
+    }
+
+    expect(describeTarget(simpleFunc)).toEqual(['a', 'b', 'c']);
+  });
+
+  test('should handle async arrow functions with nested functions', () => {
+    const simpleFunc = async (a: number, b: number, c: number): Promise<number> => {
+      const nestedFunc = async (d: number, e: number, f: number): Promise<number> => {
+        return d + e + f;
+      }
+      return a + b + c + await nestedFunc(1, 2, 3);
+    }
+
+    expect(describeTarget(simpleFunc)).toEqual(['a', 'b', 'c']);
+  });
 });

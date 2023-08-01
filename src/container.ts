@@ -61,7 +61,7 @@ export class Container {
    * @throws {Error} If a service with the same name has already been registered
    * @returns {Promise<Container>} The singleton instance of the container
    */
-  public static async getInstance(services: RegisteredService<any>[]): Promise<Container> {
+  public static async init(services: RegisteredService<any>[]): Promise<Container> {
     if (!Container._instance) {
       Container._instance = new Container();
     }
@@ -190,17 +190,12 @@ export class Container {
     }
   }
 
-  private async setupSingletons(): Promise<void> {
-    const singletons = Array.from(this._services.entries()).filter(
-      ([_, service]) => service.registrationType === 'singleton',
-    );
-
-    for (const [serviceName, service] of singletons) {
-      const instance = await this.resolve(service.impl);
-      this._singletons.set(serviceName, instance);
-    }
-  }
-
+  /**
+   * Retrieve an injected instance of the requested service.
+   * 
+   * @param serviceName Name of the service to get
+   * @returns 
+   */
   public async getService(serviceName: string): Promise<any> {
     const service = this._services.get(serviceName);
     if (!service) {
@@ -233,6 +228,17 @@ export class Container {
     // If the service is transient, return a new instance
     const instance = await this.resolve(service.impl);
     return instance;
+  }
+
+  private async setupSingletons(): Promise<void> {
+    const singletons = Array.from(this._services.entries()).filter(
+      ([_, service]) => service.registrationType === 'singleton',
+    );
+
+    for (const [serviceName, service] of singletons) {
+      const instance = await this.resolve(service.impl);
+      this._singletons.set(serviceName, instance);
+    }
   }
 }
 

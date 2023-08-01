@@ -78,7 +78,7 @@ import * as db from './core/db';
 import * as logger from './core/logger';
 import { deeperFunction } from './core/deeper';
 
-await Container.getInstance([
+await Container.init([
   singleton('db', db.createConnection, db.closeConnection),
   scoped('logger', logger.createLogger),
   transient('deeperFunction', deeperFunction),
