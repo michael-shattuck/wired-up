@@ -1,23 +1,23 @@
 import { RegisteredService } from './utils';
 
 export class Graph {
-  nodes: Set<any>;
-  edges: Map<any, any>;
+  nodes: Set<RegisteredService<any>>;
+  edges: Map<RegisteredService<any>, Set<RegisteredService<any>>>;
 
   constructor() {
     this.nodes = new Set();
     this.edges = new Map();
   }
 
-  addNode(node) {
+  addNode(node: RegisteredService<any>) {
     this.nodes.add(node);
   }
 
-  addEdge(source, destination) {
+  addEdge(source: RegisteredService<any>, destination: RegisteredService<any>) {
     if (!this.edges.has(source)) {
       this.edges.set(source, new Set());
     }
-    this.edges.get(source).add(destination);
+    this.edges.get(source)?.add(destination);
   }
 
   dependenciesOf(node) {
@@ -31,40 +31,44 @@ export function sortTopologically(registrations: RegisteredService<any>[]): Regi
   // Add services as nodes
   for (const registration of registrations) {
     graph.addNode(registration);
-  }
-  // Add dependency edges
-  for (const registration of registrations) {
     for (const dependency of registration.dependencies) {
-      graph.addEdge(registration, dependency);
+      const dependencyRegistration = registrations.find((reg) => reg.name === dependency);
+      graph.addEdge(registration, dependencyRegistration as RegisteredService<any>);
     }
   }
 
-  return registrations;
+  const sorted: RegisteredService<any>[] = [];
+  const visited = new Set();
+  const recursionStack = new Set();
 
-  // const sorted: RegisteredService<any>[] = [];
-  // const visited = new Set();
+  function visit(node: RegisteredService<any>) {
+    if (!graph.nodes.has(node)) {
+      return;
+    }
 
-  // function visit(node: RegisteredService<any>) {
-  //   if (!graph.nodes.has(node)) {
-  //     throw new Error('Graph has unknown node');
-  //   }
+    if (recursionStack.has(node)) {
+      throw new Error('Graph has cyclic dependencies');
+    }
 
-  //   if (visited.has(node)) {
-  //     return;
-  //   }
+    if (visited.has(node)) {
+      return;
+    }
 
-  //   visited.add(node);
+    recursionStack.add(node);
 
-  //   for (const dependency of graph.dependenciesOf(node)) {
-  //     visit(dependency);
-  //   }
+    for (const dependency of graph.dependenciesOf(node)) {
+      visit(dependency);
+    }
 
-  //   sorted.unshift(node);
-  // }
+    recursionStack.delete(node);
+    visited.add(node);
 
-  // for (const node of graph.nodes) {
-  //   visit(node);
-  // }
+    sorted.push(node);
+  }
 
-  // return sorted;
+  for (const node of graph.nodes) {
+    visit(node);
+  }
+
+  return sorted;
 }
