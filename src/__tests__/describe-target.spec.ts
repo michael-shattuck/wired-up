@@ -125,4 +125,83 @@ describe('describeTarget function', () => {
 
     expect(describeTarget(simpleFunc)).toEqual(['a', 'b', 'c']);
   });
+
+  test('should handle classes', () => {
+    class SimpleClass {
+      constructor(a, b, c) {}
+    }
+
+    expect(describeTarget(SimpleClass)).toEqual(['a', 'b', 'c']);
+  });
+
+  test('should handle classes with interfaces', () => {
+    interface ISimpleInterface {}
+    class SimpleClass implements ISimpleInterface {
+      constructor(a, b, c) {}
+    }
+
+    expect(describeTarget(SimpleClass)).toEqual(['a', 'b', 'c']);
+  });
+
+  test('should handle complex classes with interfaces', () => {
+    expect(describeTarget(DatabaseConnection)).toEqual(['postgresDb']);
+  });
 });
+
+
+interface IDatabaseConnection {
+  query(text: string, params?: any[] | undefined): Promise<any>;
+  close(): Promise<void>;
+}
+
+class PostgresDB {
+  pool: any;
+  client: any;
+  
+  buildPool() {
+    this.pool = {};
+  }
+
+  async connectClient() {
+    this.client = {};
+    return this.client;
+  }
+
+  async getClient() {
+    return this.client;
+  }
+
+  async closeClient() {
+    this.client = null;
+  }
+
+  async endPool() {
+    this.pool = null;
+  }
+}
+
+export class DatabaseConnection implements IDatabaseConnection {
+  postgresDb: PostgresDB;
+
+  constructor(postgresDb: PostgresDB) {
+    console.log('DatabaseConnection constructor');
+    this.postgresDb = postgresDb;
+    this.postgresDb.buildPool();
+    this.postgresDb.connectClient().then((client) => {
+      console.log('Postgres client connected');
+      client.on('error', (err) => {
+        console.error('Postgres client error: ', err);
+      });
+    });
+  }
+  
+  async query(text: string, params?: any[] | undefined) {
+    const client = await this.postgresDb.getClient();
+    return await client.query(text, params);
+  }
+
+  async close() {
+    await this.postgresDb.closeClient();
+    await this.postgresDb.endPool();
+  }
+}

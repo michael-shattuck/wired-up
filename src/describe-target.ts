@@ -6,21 +6,28 @@
  */
 export function describeTarget(func: Function): string[] {
   const funcString = func.toString();
-  const isClass = /^class\b/.test(funcString) || !!func.prototype;
+  const isClass = /^class\b/.test(funcString);
 
   if (typeof func !== 'function' && !isClass) {
     throw new Error('Must pass a function or a class');
   }
 
-  const arrowMatch = funcString.match(/\(?[^]*?\)?\s*=>/);
-
-  if (arrowMatch) {
-    return parseParams(arrowMatch[0]);
+  if (isClass) {
+    const constructorMatch = funcString.match(/constructor\s*\(([^)]*)\)/);
+    if (constructorMatch) {
+      return parseParams(constructorMatch[1]);
+    }
+    return [];
   }
 
-  const functionMatch = funcString.match(/\([^]*?\)/);
-  if (functionMatch) {
-    return parseParams(functionMatch[0]);
+  const match = funcString.match(/\(.*\)\s*{/);
+  if (match) {
+    return parseParams(match[0]);
+  }
+
+  const arrowMatch = funcString.match(/\(?[^]*?\)?\s*=>/);
+  if (arrowMatch) {
+    return parseParams(arrowMatch[0]);
   }
 
   return [];
