@@ -148,7 +148,6 @@ describe('describeTarget function', () => {
   });
 });
 
-
 interface IDatabaseConnection {
   query(text: string, params?: any[] | undefined): Promise<any>;
   close(): Promise<void>;
@@ -157,7 +156,7 @@ interface IDatabaseConnection {
 class PostgresDB {
   pool: any;
   client: any;
-  
+
   buildPool() {
     this.pool = {};
   }
@@ -194,7 +193,7 @@ export class DatabaseConnection implements IDatabaseConnection {
       });
     });
   }
-  
+
   async query(text: string, params?: any[] | undefined) {
     const client = await this.postgresDb.getClient();
     return await client.query(text, params);
