@@ -1,6 +1,6 @@
 {
   "name": "wired-up",
-  "version": "0.3.1",
+  "version": "0.4.1",
   "description": "Painless dependency injection for TypeScript",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
